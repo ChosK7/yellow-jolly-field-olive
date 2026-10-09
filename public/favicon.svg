@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Office Story">
+  <rect width="32" height="32" rx="7" fill="#1C1612"/>
+  <rect x="8" y="7" width="16" height="21" rx="2" fill="#F3E6C8"/>
+  <rect x="11" y="4" width="10" height="5" rx="1.5" fill="#E2A322"/>
+  <rect x="14" y="5.2" width="4" height="2.6" rx="0.6" fill="#1C1612"/>
+  <rect x="11" y="14" width="10" height="2" rx="0.6" fill="#1F8A7B"/>
+  <rect x="11" y="18" width="7" height="2" rx="0.6" fill="#D4654A"/>
+</svg>

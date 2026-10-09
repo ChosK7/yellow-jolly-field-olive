@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #1c1612;
+  --color-walnut: #4a3428;
+  --color-cream: #f3e6c8;
+  --color-cream-deep: #e4d0a4;
+  --color-brass: #e2a322;
+  --color-teal: #1f8a7b;
+  --color-coral: #c4543c;
+  --color-floor: #2a2118;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --radius: 0.9rem;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-ink);
+    color: var(--color-cream);
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+  }
+
+  button:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+}
+
+.stage {
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  background: var(--color-ink);
+}
+
+.phone {
+  width: min(100%, 30rem);
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  position: relative;
+  overflow: hidden;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+
+.nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.safe-top {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+.safe-bottom {
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+}
+
+.sheet-scroll {
+  max-height: 46dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.viewport {
+  flex: 1 1 auto;
+  min-height: 11rem;
+  position: relative;
+  background: var(--color-floor);
+  touch-action: none;
+}
+
+@media (min-width: 760px) {
+  .stage {
+    align-items: center;
+    padding: 1.25rem 0;
+  }
+
+  .phone {
+    height: min(calc(100dvh - 2.5rem), 920px);
+    border-radius: 1.5rem;
+    box-shadow: 0 24px 70px rgb(0 0 0 / 0.38);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active:not(:disabled) {
+    transform: none;
+  }
+}
