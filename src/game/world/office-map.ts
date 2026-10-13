@@ -1,13 +1,13 @@
 import { BREAK_TICKS, COMMUTE_TICKS } from "../sim/balance.ts";
 import type { Employee, Upgrades } from "../sim/types.ts";
 
-export const COLS = 8;
-export const ROWS = 12;
+export const COLS = 7;
+export const ROWS = 9;
 
 export type Cell = { c: number; r: number };
 export type Dir = "n" | "e" | "s" | "w";
 export type Pose = "walk" | "sit" | "stand" | "rest";
-export type FurnKind = "desk" | "chair" | "pc" | "printer" | "coffee" | "plant" | "bench" | "seal";
+export type FurnKind = "desk" | "chair" | "pc" | "printer" | "coffee" | "plant" | "bench" | "seal" | "shelf" | "lamp";
 
 export type Furn = {
   id: string;
@@ -27,21 +27,21 @@ export type ActorView = {
 };
 
 const SEAT: Record<string, Cell> = {
-  lina: { c: 2, r: 3 },
-  otto: { c: 5, r: 3 },
-  nara: { c: 3, r: 7 },
+  lina: { c: 2, r: 2 },
+  otto: { c: 4, r: 2 },
+  nara: { c: 3, r: 5 },
 };
 
 const HOME: Record<string, Cell> = {
-  lina: { c: 2, r: 8 },
-  otto: { c: 5, r: 8 },
-  nara: { c: 5, r: 9 },
+  lina: { c: 2, r: 5 },
+  otto: { c: 4, r: 5 },
+  nara: { c: 5, r: 4 },
 };
 
 const DESK: Record<string, Cell> = {
-  lina: { c: 2, r: 2 },
-  otto: { c: 5, r: 2 },
-  nara: { c: 3, r: 6 },
+  lina: { c: 2, r: 1 },
+  otto: { c: 4, r: 1 },
+  nara: { c: 3, r: 4 },
 };
 
 function same(a: Cell, b: Cell): boolean {
@@ -68,7 +68,7 @@ export function isWall(c: number, r: number): boolean {
 }
 
 export function isWindow(c: number, r: number): boolean {
-  return r === 0 && (c === 2 || c === 3 || c === 5);
+  return r === 0 && (c === 2 || c === 4);
 }
 
 export function isDoor(c: number, r: number): boolean {
@@ -83,8 +83,9 @@ export function furniture(upgrades: Upgrades): Furn[] {
     { id: "desk-otto", kind: "desk", ...DESK.otto!, blocks: true, owner: "otto" },
     { id: "pc-otto", kind: "pc", ...DESK.otto!, blocks: false, owner: "otto" },
     { id: "chair-otto", kind: "chair", ...SEAT.otto!, blocks: false, owner: "otto" },
-    { id: "printer", kind: "printer", c: 6, r: 5, blocks: true },
-    { id: "bench", kind: "bench", c: 3, r: 10, blocks: false },
+    { id: "printer", kind: "printer", c: 5, r: 3, blocks: true },
+    { id: "bench", kind: "bench", c: 3, r: 7, blocks: false },
+    { id: "shelf", kind: "shelf", c: 1, r: 7, blocks: true },
   ];
   if (upgrades.desk) {
     items.push(
@@ -93,14 +94,15 @@ export function furniture(upgrades: Upgrades): Furn[] {
       { id: "chair-nara", kind: "chair", ...SEAT.nara!, blocks: false, owner: "nara" },
     );
   }
-  if (upgrades.coffee) items.push({ id: "coffee", kind: "coffee", c: 1, r: 5, blocks: true });
+  if (upgrades.coffee) items.push({ id: "coffee", kind: "coffee", c: 1, r: 3, blocks: true });
   if (upgrades.plants) {
     items.push(
-      { id: "plant-w", kind: "plant", c: 1, r: 2, blocks: true },
-      { id: "plant-e", kind: "plant", c: 6, r: 2, blocks: true },
+      { id: "plant-w", kind: "plant", c: 1, r: 1, blocks: true },
+      { id: "plant-e", kind: "plant", c: 5, r: 1, blocks: true },
     );
   }
-  if (upgrades.seal) items.push({ id: "seal", kind: "seal", c: 4, r: 0, blocks: false });
+  if (upgrades.seal) items.push({ id: "seal", kind: "seal", c: 3, r: 0, blocks: false });
+  if (upgrades.monitors) items.push({ id: "lamp", kind: "lamp", c: 5, r: 7, blocks: true });
   return items;
 }
 
@@ -148,9 +150,14 @@ export function findPath(from: Cell, to: Cell, upgrades: Upgrades): Cell[] {
 }
 
 function restCell(id: string, upgrades: Upgrades): Cell {
-  const slot = id === "otto" ? 1 : id === "nara" ? 2 : 0;
-  if (upgrades.coffee) return { c: 2 + slot, r: 5 };
-  return { c: 2 + slot, r: 10 };
+  if (upgrades.coffee) {
+    if (id === "otto") return { c: 2, r: 3 };
+    if (id === "nara") return { c: 1, r: 4 };
+    return { c: 1, r: 2 };
+  }
+  if (id === "otto") return { c: 4, r: 7 };
+  if (id === "nara") return { c: 5, r: 6 };
+  return { c: 2, r: 7 };
 }
 
 function dirOf(a: Cell, b: Cell, fallback: Dir): Dir {

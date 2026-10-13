@@ -1,4 +1,4 @@
-import { Briefcase, Lamp, Pause, Play, Users, Volume2, VolumeX } from "lucide-react";
+import { Briefcase, ClipboardList, Lamp, Pause, Play, Users, Volume2, VolumeX } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { blip, isMuted, loadMuted, setMuted, unlockAudio } from "../audio.ts";
 import { resetPresentation } from "../render/draw-office.ts";
@@ -18,10 +18,10 @@ import { accept, beginFresh, buy, employ, getState, hadSave, nextDay, storageLab
 import { OfficeCanvas } from "./office-canvas.tsx";
 import { useGameLoop } from "./use-loop.ts";
 
-type Tab = "contracts" | "team" | "office";
+type Tab = "contracts" | "team" | "office" | "manage";
 
-const primaryBtn = "flex h-12 w-full items-center justify-center rounded-xl bg-ink px-4 font-medium text-cream disabled:opacity-45";
-const ghostBtn = "flex h-12 w-full items-center justify-center rounded-xl bg-cream-deep px-4 font-medium text-ink disabled:opacity-45";
+const gameBtn = "pixel-btn flex h-11 w-full items-center justify-center px-3 text-sm font-medium text-cream disabled:opacity-45";
+const gameGhost = "pixel-ghost flex h-11 w-full items-center justify-center px-3 text-sm font-medium text-ink disabled:opacity-45";
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -153,8 +153,8 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
           <img src="/office/room-start.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
           <div className="absolute inset-0 bg-ink/45" />
           <div className="safe-top relative mt-auto px-4 pb-6">
-            <div className="rounded-2xl bg-cream px-5 py-5 text-ink">
-              <p className="text-sm tracking-wide text-walnut">Estúdio</p>
+            <div className="pixel-panel px-5 py-5 text-ink">
+              <p className="text-xs tracking-wide text-walnut">Estúdio</p>
               <h1 className="display text-5xl leading-none">Office Story</h1>
               <p className="mt-3 text-base leading-snug text-walnut">
                 O quadro abre de manhã. Alguém senta e entrega. O lugar muda.
@@ -162,15 +162,15 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
               <div className="mt-5 grid gap-2">
                 {ready && hadSave() ? (
                   <>
-                    <button className={primaryBtn} data-testid="continue" onClick={continueGame}>
+                    <button className={gameBtn} data-testid="continue" onClick={continueGame}>
                       Continuar expediente
                     </button>
-                    <button className={ghostBtn} data-testid="new-game" onClick={startFresh}>
+                    <button className={gameGhost} data-testid="new-game" onClick={startFresh}>
                       Começar do zero
                     </button>
                   </>
                 ) : (
-                  <button className={primaryBtn} data-testid="new-game" onClick={startFresh}>
+                  <button className={gameBtn} data-testid="new-game" onClick={startFresh}>
                     Começar o dia
                   </button>
                 )}
@@ -187,36 +187,21 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
   }
 
   const offers = state.contracts.filter((contract) => contract.status === "offered").length;
-  const latest = state.log[0]?.text ?? "";
 
   return (
     <main className="stage" onPointerDown={() => unlockAudio()}>
       <section className="phone" data-testid="office-root">
-        <header className="safe-top bg-cream px-4 pb-2">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="display text-2xl leading-none">Office Story</p>
-              <p className="nums mt-1 text-sm text-walnut" data-testid="clock">
-                Dia {state.day} · {formatClock(state.minute)}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="nums display text-2xl leading-none" data-testid="money">
-                {formatMoney(state.money)}
-              </p>
-              <p className="nums mt-1 text-sm text-walnut">Rep {state.reputation}</p>
-            </div>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-cream-deep text-sm" onClick={togglePause} data-testid="pause">
+        <header className="safe-top pixel-hud px-2 pt-1 pb-1">
+          <div className="flex items-center gap-1">
+            <p className="display min-w-0 flex-1 truncate text-base leading-none">Office Story</p>
+            <button className="pixel-chip grid size-11 place-items-center" onClick={togglePause} data-testid="pause" aria-label={state.pausedByUser ? "Retomar" : "Pausar"}>
               {state.pausedByUser ? <Play className="size-4" /> : <Pause className="size-4" />}
-              {state.pausedByUser ? "Retomar" : "Pausar"}
             </button>
-            <button className="nums flex h-11 w-14 items-center justify-center rounded-xl bg-cream-deep text-sm" onClick={toggleSpeed} data-testid="speed">
+            <button className="pixel-chip nums grid size-11 place-items-center text-sm" onClick={toggleSpeed} data-testid="speed">
               {state.speed}×
             </button>
             <button
-              className="flex h-11 w-12 items-center justify-center rounded-xl bg-cream-deep"
+              className="pixel-chip grid size-11 place-items-center"
               aria-label={muted ? "Ligar som" : "Silenciar"}
               onClick={() => {
                 const next = !isMuted();
@@ -226,6 +211,13 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
             >
               {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
             </button>
+          </div>
+          <div className="nums mt-1 flex items-center justify-between gap-2 px-1 text-xs text-walnut">
+            <span data-testid="clock">
+              Dia {state.day} · {formatClock(state.minute)}
+            </span>
+            <span data-testid="money">{formatMoney(state.money)}</span>
+            <span>Rep {state.reputation}</span>
           </div>
         </header>
 
@@ -269,14 +261,15 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
                   }}
                 />
               ) : null}
+              {tab === "manage" ? <Manage state={state} /> : null}
             </section>
           ) : null}
           {state.pausedByUser ? (
-            <div className="play-pause grid place-items-center bg-ink/40 px-6">
-              <div className="w-full rounded-2xl bg-cream px-5 py-4 text-center">
+            <div className="play-pause grid place-items-center bg-ink/55 px-6">
+              <div className="pixel-panel w-full px-5 py-4 text-center">
                 <p className="display text-3xl">Relógio parado</p>
                 <p className="mt-1 text-sm text-walnut">O expediente não anda enquanto você lê.</p>
-                <button className={`${primaryBtn} mt-4`} onClick={togglePause}>
+                <button className={`${gameBtn} mt-4`} onClick={togglePause}>
                   Retomar
                 </button>
               </div>
@@ -284,11 +277,7 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
           ) : null}
         </div>
 
-        <p className="truncate bg-ink px-4 py-2 text-sm text-cream" aria-live="polite">
-          {latest}
-        </p>
-
-        <nav className="safe-bottom grid grid-cols-3 border-t border-walnut/15 bg-cream">
+        <nav className="safe-bottom pixel-nav grid grid-cols-4">
           <TabButton
             label="Contratos"
             testId="tab-contracts"
@@ -311,12 +300,19 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
             icon={<Lamp className="size-5" />}
             onClick={() => setTab(tab === "office" ? null : "office")}
           />
+          <TabButton
+            label="Gestão"
+            testId="tab-manage"
+            active={tab === "manage"}
+            icon={<ClipboardList className="size-5" />}
+            onClick={() => setTab(tab === "manage" ? null : "manage")}
+          />
         </nav>
 
         {state.dayReport ? (
           <div className="absolute inset-0 z-10 flex items-end bg-ink/55 px-4 pb-8">
-            <div className="safe-bottom w-full rounded-2xl bg-cream px-5 py-5">
-              <p className="text-sm text-walnut">Fim do expediente</p>
+            <div className="pixel-panel safe-bottom w-full px-5 py-5">
+              <p className="text-xs text-walnut">Fim do expediente</p>
               <h2 className="display text-4xl leading-none">Dia {state.dayReport.day}</h2>
               <p className="nums mt-3 text-lg">{formatMoney(state.dayReport.earned)} entrou hoje</p>
               <p className="text-sm text-walnut">
@@ -324,7 +320,7 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
                 {state.dayReport.failed === 1 ? "atraso" : "atrasos"}
               </p>
               <p className="mt-2 text-sm">{state.dayReport.note}</p>
-              <button className={`${primaryBtn} mt-4`} data-testid="next-day" onClick={() => nextDay()}>
+              <button className={`${gameBtn} mt-4`} data-testid="next-day" onClick={() => nextDay()}>
                 Abrir o dia seguinte
               </button>
             </div>
@@ -352,7 +348,7 @@ function TabButton({
 }) {
   return (
     <button
-      className={`relative flex min-h-14 flex-col items-center justify-center gap-1 text-xs ${active ? "text-ink" : "text-walnut"}`}
+      className={`pixel-tab relative flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs ${active ? "is-on" : ""}`}
       aria-pressed={active}
       data-testid={testId}
       onClick={onClick}
@@ -360,7 +356,7 @@ function TabButton({
       {icon}
       {label}
       {badge ? (
-        <span className="nums absolute top-1 right-6 grid min-h-5 min-w-5 place-items-center rounded-full bg-brass px-1 text-xs text-ink">
+        <span className="nums pixel-badge absolute top-1 right-1 grid min-h-5 min-w-5 place-items-center px-1 text-xs">
           {badge}
         </span>
       ) : null}
@@ -379,7 +375,7 @@ function Contracts({ state }: { state: ReturnType<typeof useGame> }) {
         const owner = state.employees.find((employee) => employee.id === contract.assigneeId);
         const solo = gate && gate.ok && gate.options.length === 1 ? gate.options[0] : null;
         return (
-          <article key={contract.id} className="rounded-xl bg-cream-deep/50 p-3">
+          <article key={contract.id} className="pixel-card p-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="display text-xl leading-tight">{contract.client}</h3>
               <span className="flex items-center gap-1 text-xs text-walnut">
@@ -408,7 +404,7 @@ function Contracts({ state }: { state: ReturnType<typeof useGame> }) {
             {solo ? (
               <div className="mt-2">
                 <button
-                  className={primaryBtn}
+                  className={gameBtn}
                   data-testid={`accept-${contract.id}`}
                   disabled={!solo.fits}
                   onClick={() => {
@@ -432,7 +428,7 @@ function Contracts({ state }: { state: ReturnType<typeof useGame> }) {
                   return (
                     <button
                       key={option.employeeId}
-                      className={`${ghostBtn} choice-btn`}
+                      className={`${gameGhost} choice-btn`}
                       data-testid={`assign-${contract.id}-${employee.id}`}
                       disabled={!option.fits}
                       onClick={() => {
@@ -477,7 +473,7 @@ function Team({
       {state.employees.map((employee) => (
         <article
           key={employee.id}
-          className={`rounded-xl p-3 ${selectedId === employee.id ? "bg-cream-deep" : "bg-cream-deep/50"}`}
+          className={`pixel-card p-3 ${selectedId === employee.id ? "is-on" : ""}`}
         >
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="display text-xl">{employee.name}</h3>
@@ -498,10 +494,10 @@ function Team({
         </article>
       ))}
       {!hired ? (
-        <div className="rounded-xl border border-walnut/15 p-3">
+        <div className="pixel-card p-3">
           <h3 className="display text-xl">Vaga</h3>
           <p className="mt-1 text-sm text-walnut">Nara Mendes, operações. {formatMoney(HIRE_COST)}.</p>
-          <button className={`${primaryBtn} mt-3`} data-testid="hire" disabled={!state.upgrades.desk || state.money < HIRE_COST} onClick={onHire}>
+          <button className={`${gameBtn} mt-3`} data-testid="hire" disabled={!state.upgrades.desk || state.money < HIRE_COST} onClick={onHire}>
             Contratar Nara
           </button>
           <p className="mt-2 text-xs text-walnut">
@@ -536,14 +532,14 @@ function Office({
         const item = UPGRADE_CATALOG[id];
         const owned = state.upgrades[id];
         return (
-          <article key={id} className="rounded-xl bg-cream-deep/50 p-3">
+          <article key={id} className="pixel-card p-3">
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="display text-xl">{item.name}</h3>
               <span className="nums text-sm">{owned ? "No escritório" : formatMoney(item.cost)}</span>
             </div>
             <p className="mt-1 text-sm text-walnut">{item.blurb}</p>
             {owned ? null : (
-              <button className={`${primaryBtn} mt-3`} data-testid={`buy-${id}`} disabled={state.money < item.cost} onClick={() => onBuy(id)}>
+              <button className={`${gameBtn} mt-3`} data-testid={`buy-${id}`} disabled={state.money < item.cost} onClick={() => onBuy(id)}>
                 Comprar
               </button>
             )}
@@ -551,6 +547,21 @@ function Office({
         );
       })}
       {note ? <p className="text-xs text-coral">{note}</p> : null}
+    </div>
+  );
+}
+
+function Manage({ state }: { state: ReturnType<typeof useGame> }) {
+  const lines = state.log.slice(0, 8);
+  return (
+    <div className="grid gap-3 pb-4">
+      <p className="text-sm leading-snug">{officeLine(state.upgrades)}</p>
+      <ul className="pixel-card grid gap-2 p-3 text-sm" aria-live="polite">
+        {lines.length === 0 ? <li className="text-walnut">Nada no livro ainda.</li> : null}
+        {lines.map((entry) => (
+          <li key={entry.id}>{entry.text}</li>
+        ))}
+      </ul>
       <p className="text-xs text-walnut">{storageLabel()} · funciona sem rede.</p>
     </div>
   );

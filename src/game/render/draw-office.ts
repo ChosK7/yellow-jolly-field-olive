@@ -6,6 +6,7 @@ import {
   ROWS,
   actorView,
   furniture,
+  isDoor,
   isWindow,
   type ActorView,
   type Furn,
@@ -41,6 +42,7 @@ const C = {
   cream: "#f3e6c8",
   brass: "#e2a322",
   teal: "#1f8a7b",
+  shelfFace: "#c9a27a",
 };
 
 const PIP: Record<SpriteId, string> = {
@@ -56,6 +58,7 @@ const boxes: Box[] = [];
 const particles: Particle[] = [];
 const display = new Map<string, Spot>();
 const sheets = new Map<SheetId, HTMLImageElement>();
+const broken = new Set<SheetId>();
 let seenDone = 0;
 let armed = false;
 let lastDraw = 0;
@@ -98,8 +101,14 @@ function sheet(id: SheetId): HTMLImageElement | null {
     image = new Image();
     image.decoding = "async";
     image.src = SHEET_URL[id];
+    image.addEventListener("error", () => {
+      if (broken.has(id)) return;
+      broken.add(id);
+      console.error("[office] falha ao carregar sprite", id, SHEET_URL[id]);
+    });
     sheets.set(id, image);
   }
+  if (broken.has(id)) return null;
   return image.complete && image.naturalWidth > 0 ? image : null;
 }
 
@@ -143,6 +152,37 @@ function spawn(x: number, y: number) {
   shake = 1;
 }
 
+function fitOrigin(view: number, grid: number, focus: number): number {
+  if (grid <= view) return Math.floor((view - grid) / 2);
+  return Math.min(0, Math.max(view - grid, Math.floor(view / 2 - focus)));
+}
+
+function drawFallback(
+  ctx: CanvasRenderingContext2D,
+  sprite: SpriteId,
+  feetX: number,
+  feetY: number,
+  tw: number,
+  seated: boolean,
+) {
+  const s = Math.max(2, Math.floor(tw / 14));
+  const body = seated ? s * 7 : s * 12;
+  const left = feetX - s * 3;
+  const top = feetY - body;
+  ctx.fillStyle = PIP[sprite];
+  ctx.fillRect(left, top + s * 3, s * 6, body - s * 3);
+  ctx.fillStyle = C.cream;
+  ctx.fillRect(left + s, top, s * 4, s * 4);
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(left + s, top + s, s, s);
+  ctx.fillRect(left + s * 3, top + s, s, s);
+  if (!seated) {
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(left + s, feetY - s * 2, s, s * 2);
+    ctx.fillRect(left + s * 4, feetY - s * 2, s, s * 2);
+  }
+}
+
 function drawShell(ctx: CanvasRenderingContext2D, ox: number, oy: number, tile: number) {
   const x = ox + tile;
   const y = oy + tile;
@@ -161,14 +201,13 @@ function drawShell(ctx: CanvasRenderingContext2D, ox: number, oy: number, tile: 
   for (let yy = y + 2; yy < y + h; yy += band) ctx.fillRect(x + 2, yy, w - 4, 1);
   for (let c = 0; c < COLS; c++) {
     drawWall(ctx, ox + c * tile, oy, tile, tile, isWindow(c, 0));
-    if (c !== 3 && c !== 4) drawWall(ctx, ox + c * tile, oy + (ROWS - 1) * tile, tile, tile, false);
+    if (isDoor(c, ROWS - 1)) drawDoor(ctx, ox + c * tile, oy + (ROWS - 1) * tile, tile, tile);
+    else drawWall(ctx, ox + c * tile, oy + (ROWS - 1) * tile, tile, tile, false);
   }
   for (let r = 1; r < ROWS - 1; r++) {
     drawWall(ctx, ox, oy + r * tile, tile, tile, false);
     drawWall(ctx, ox + (COLS - 1) * tile, oy + r * tile, tile, tile, false);
   }
-  drawDoor(ctx, ox + 3 * tile, oy + (ROWS - 1) * tile, tile, tile);
-  drawDoor(ctx, ox + 4 * tile, oy + (ROWS - 1) * tile, tile, tile);
   ctx.fillStyle = C.trim;
   ctx.fillRect(x, y, w, Math.max(3, Math.floor(tile * 0.08)));
 }
@@ -181,7 +220,7 @@ function drawWall(ctx: CanvasRenderingContext2D, x: number, y: number, tw: numbe
   const rail = Math.floor(th * 0.58);
   ctx.fillStyle = C.trim;
   ctx.fillRect(x, y + rail, tw, Math.max(2, Math.floor(th * 0.06)));
-  ctx.fillStyle = "#c9a27a";
+  ctx.fillStyle = C.shelfFace;
   ctx.fillRect(x + 2, y + rail + 3, tw - 4, Math.floor(th * 0.22));
   ctx.fillStyle = C.trim;
   ctx.fillRect(x + 3, y + rail + 5, tw - 6, 1);
@@ -218,10 +257,10 @@ function drawDoor(ctx: CanvasRenderingContext2D, x: number, y: number, tw: numbe
 }
 
 function propBox(index: number, tw: number): { dw: number; dh: number; foot: number; lift: number } {
-  if (index === 2) return { dw: tw * 1.75, dh: tw * 1.75, foot: 111, lift: tw * 0.12 };
-  if (index === 3) return { dw: tw * 0.9, dh: tw * 1.7, foot: 118, lift: 0 };
-  if (index === 1) return { dw: tw * 1.25, dh: tw * 1.4, foot: 107, lift: 0 };
-  return { dw: tw * 1.15, dh: tw * 1.25, foot: 104, lift: 0 };
+  if (index === 2) return { dw: tw * 1.35, dh: tw * 1.35, foot: 78, lift: 0 };
+  if (index === 3) return { dw: tw * 0.78, dh: tw * 1.4, foot: 118, lift: 0 };
+  if (index === 1) return { dw: tw * 1.05, dh: tw * 1.15, foot: 107, lift: 0 };
+  return { dw: tw * 0.95, dh: tw * 1.05, foot: 104, lift: 0 };
 }
 
 function drawProp(ctx: CanvasRenderingContext2D, index: number, x: number, y: number, tw: number, th: number) {
@@ -229,26 +268,27 @@ function drawProp(ctx: CanvasRenderingContext2D, index: number, x: number, y: nu
   const box = propBox(index, tw);
   const left = x + (tw - box.dw) / 2;
   const top = y + th - (box.foot / CELL) * box.dh - box.lift;
-  if (!image) return;
+  if (!image) {
+    ctx.fillStyle = index === 1 ? C.teal : index === 2 ? C.door : C.brass;
+    ctx.fillRect(x + tw * 0.2, y + th * 0.35, tw * 0.6, th * 0.5);
+    return;
+  }
   blit(ctx, image, index, left, top, box.dw, box.dh, false);
 }
 
 function drawChair(ctx: CanvasRenderingContext2D, x: number, y: number, tw: number, th: number) {
   const s = Math.max(2, Math.floor(tw / 14));
-  const w = s * 12;
-  const h = s * 12;
+  const w = s * 10;
   const left = x + Math.floor((tw - w) / 2);
-  const top = y + Math.floor(th * 0.28);
+  const top = y + Math.floor(th * 0.34);
   ctx.fillStyle = C.chair;
-  ctx.fillRect(left + s, top, w - s * 2, s * 4);
-  ctx.fillRect(left, top + s * 3, w, s * 3);
+  ctx.fillRect(left + s, top, w - s * 2, s * 3);
+  ctx.fillRect(left, top + s * 2, w, s * 2);
   ctx.fillStyle = C.chairSeat;
-  ctx.fillRect(left + s, top + s * 4, w - s * 2, s * 2);
+  ctx.fillRect(left + s, top + s * 3, w - s * 2, s * 2);
   ctx.fillStyle = C.chairWood;
-  ctx.fillRect(left + s, top + s * 7, s, s * 4);
-  ctx.fillRect(left + w - s * 2, top + s * 7, s, s * 4);
-  ctx.fillStyle = C.cream;
-  ctx.fillRect(left + s * 2, top + s, s, s);
+  ctx.fillRect(left + s, top + s * 6, s, s * 3);
+  ctx.fillRect(left + w - s * 2, top + s * 6, s, s * 3);
 }
 
 function drawPrinter(ctx: CanvasRenderingContext2D, x: number, y: number, tw: number, th: number) {
@@ -289,6 +329,29 @@ function drawSeal(ctx: CanvasRenderingContext2D, x: number, y: number, tw: numbe
   ctx.fillRect(left + Math.floor(w * 0.35), top + Math.floor(h * 0.28), Math.floor(w * 0.3), Math.floor(h * 0.44));
 }
 
+function drawShelf(ctx: CanvasRenderingContext2D, x: number, y: number, tw: number, th: number) {
+  const s = Math.max(2, Math.floor(tw / 14));
+  const left = x + Math.floor(tw * 0.12);
+  const top = y + Math.floor(th * 0.08);
+  const w = s * 10;
+  const h = Math.floor(th * 0.84);
+  ctx.fillStyle = C.trim;
+  ctx.fillRect(left, top, w, h);
+  ctx.fillStyle = C.shelfFace;
+  ctx.fillRect(left + s, top + s, w - s * 2, h - s * 2);
+  ctx.fillStyle = C.trim;
+  ctx.fillRect(left + s, top + Math.floor(h * 0.32), w - s * 2, s);
+  ctx.fillRect(left + s, top + Math.floor(h * 0.62), w - s * 2, s);
+  ctx.fillStyle = C.teal;
+  ctx.fillRect(left + s * 2, top + s * 2, s * 2, s);
+  ctx.fillStyle = C.brass;
+  ctx.fillRect(left + s * 5, top + s * 2, s * 2, s);
+  ctx.fillStyle = C.paper;
+  ctx.fillRect(left + s * 2, top + Math.floor(h * 0.4), s * 4, Math.max(2, s));
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(left + s * 6, top + Math.floor(h * 0.72), s * 2, s * 2);
+}
+
 function drawActor(
   ctx: CanvasRenderingContext2D,
   employee: Employee,
@@ -306,21 +369,31 @@ function drawActor(
   const image = sheet(employee.sprite);
   const seated = view.pose === "sit";
   const step = Math.floor(now / 180);
-  const frameIndex = seated ? 2 : view.pose === "walk" ? (step % 2 === 0 ? 1 : 3) : view.pose === "rest" ? 1 : 0;
+  const frameIndex = seated ? 2 : view.pose === "walk" ? (step % 2 === 0 ? 1 : 3) : view.pose === "rest" ? 1 : step % 2 === 0 ? 0 : 1;
   const content = seated ? 97 : 108;
-  const want = seated ? tw * 1.08 : tw * 2.05;
+  const want = seated ? tw * 1.18 : tw * 1.62;
   const scale = want / content;
   const dw = CELL * scale;
   const dh = CELL * scale;
   const feetX = ox + (spot.c + 0.5) * tw;
-  const footFrac = seated ? 0.98 : view.pose === "rest" ? 0.78 : 0.96;
-  const bob = !reduced && view.pose === "walk" ? (step % 2 === 0 ? -Math.max(1, Math.round(tw * 0.04)) : 0) : 0;
+  const footFrac = seated ? 0.96 : view.pose === "rest" ? 0.8 : 0.94;
+  const bob =
+    reduced
+      ? 0
+      : view.pose === "walk"
+        ? step % 2 === 0
+          ? -Math.max(1, Math.round(tw * 0.04))
+          : 0
+        : view.pose === "stand"
+          ? Math.round(Math.sin(now / 320) * Math.max(1, tw * 0.025))
+          : 0;
   const feetY = oy + (spot.r + footFrac) * th + bob;
   const left = feetX - dw / 2;
   const top = feetY - FEET * scale;
   ctx.fillStyle = "rgba(28,22,18,0.28)";
   ctx.fillRect(feetX - tw * 0.22, feetY - Math.max(2, tw * 0.04), tw * 0.44, Math.max(3, tw * 0.07));
   if (image) blit(ctx, image, frameIndex, left, top, dw, dh, view.dir === "w");
+  else drawFallback(ctx, employee.sprite, feetX, feetY, tw, seated);
 
   const hitW = dw * 0.5;
   const hitH = content * scale;
@@ -378,17 +451,17 @@ export function drawOffice(
     shake = 1;
   }
 
-  const tile = Math.max(8, Math.min(Math.floor(width / COLS), Math.floor(height / ROWS)));
+  const tile = Math.max(8, Math.ceil(width / COLS), Math.ceil(height / ROWS));
   const gridW = tile * COLS;
   const gridH = tile * ROWS;
-  const ox = Math.floor((width - gridW) / 2);
-  const oy = Math.floor((height - gridH) / 2);
+  const ox = fitOrigin(width, gridW, 3.5 * tile);
+  const oy = fitOrigin(height, gridH, 3.2 * tile);
   const jitter = options.reduced ? 0 : Math.sin(now / 40) * shake * 1.5;
   shake *= 0.86;
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = C.void;
+  ctx.fillStyle = C.floorA;
   ctx.fillRect(0, 0, width, height);
   ctx.save();
   ctx.translate(jitter, 0);
@@ -400,16 +473,12 @@ export function drawOffice(
     if (item.kind === "pc") continue;
     const x = ox + item.c * tile;
     const y = oy + item.r * tile;
+    const behind = item.kind === "desk" || item.kind === "seal";
     queue.push({
-      r: item.r + (item.kind === "desk" ? 0 : 0.05),
+      r: behind ? item.r - 0.55 : item.r + 0.05,
       z: item.kind === "chair" ? 1 : 2,
       run: () => paintFurn(ctx, item, x, y, tile, tile),
     });
-  }
-  if (state.upgrades.monitors) {
-    const x = ox + 6 * tile;
-    const y = oy + 1 * tile;
-    queue.push({ r: 1.1, z: 2, run: () => drawProp(ctx, 3, x, y, tile, tile) });
   }
 
   const people = state.employees.map((employee) => {
@@ -476,4 +545,6 @@ function paintFurn(ctx: CanvasRenderingContext2D, item: Furn, x: number, y: numb
   else if (item.kind === "printer") drawPrinter(ctx, x, y, tw, th);
   else if (item.kind === "bench") drawBench(ctx, x, y, tw, th);
   else if (item.kind === "seal") drawSeal(ctx, x, y, tw, th);
+  else if (item.kind === "shelf") drawShelf(ctx, x, y, tw, th);
+  else if (item.kind === "lamp") drawProp(ctx, 3, x, y, tw, th);
 }
