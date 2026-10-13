@@ -395,41 +395,79 @@ export function tick(state: GameState): GameState {
   return next;
 }
 
-export function previewAccept(state: GameState, contractId: string): Preview {
-  if (state.dayReport) return { ok: false, reason: "O expediente acabou. Abra o dia seguinte." };
-  const contract = state.contracts.find((item) => item.id === contractId);
-  if (!contract || contract.status !== "offered") return { ok: false, reason: "Esse contrato não está no quadro." };
+export type AssigneeOption = {
+  employeeId: string;
+  etaMinutes: number;
+  fits: boolean;
+};
+
+function rosterGate(state: GameState, contract: Contract): { reason: string | null; free: Employee[] } {
   const roster = state.employees.filter((employee) => employee.role === contract.role);
   if (roster.length === 0) {
     return {
-      ok: false,
       reason:
         contract.role === "ops"
           ? "Falta alguém de operações. A terceira mesa abre essa vaga."
           : "Ninguém com essa função na equipe.",
+      free: [],
     };
   }
-  const free = roster.find((employee) => employee.contractId === null);
-  const lead = roster[0]?.name ?? "A equipe";
-  if (!free) {
+  const free = roster.filter((employee) => employee.contractId === null);
+  if (free.length === 0) {
+    const lead = roster[0]?.name ?? "A equipe";
     const female = lead.startsWith("Lina") || lead.startsWith("Nara");
-    return { ok: false, reason: `${firstName(lead)} já está ocupad${female ? "a" : "o"}.` };
+    return { reason: `${firstName(lead)} já está ocupad${female ? "a" : "o"}.`, free: [] };
   }
-  const optimistic = { ...free, energy: Math.max(free.energy, 70) };
+  return { reason: null, free };
+}
+
+function etaFor(state: GameState, contract: Contract, employee: Employee): { etaMinutes: number; fits: boolean } {
+  const optimistic = { ...employee, energy: Math.max(employee.energy, 70) };
   const per = productionPerTick(optimistic, state.upgrades);
   const remain = Math.max(0, contract.workTotal - contract.workDone);
   const workTicks = per > 0 ? Math.ceil(remain / per) : 9999;
   const etaTicks = workTicks + COMMUTE_TICKS;
   const finishAt = absoluteMinute(state.day, state.minute) + etaTicks * MINUTES_PER_TICK;
-  if (finishAt > contract.deadlineAt) return { ok: false, reason: "Não cabe no prazo com quem está livre." };
-  return { ok: true, employeeId: free.id, etaMinutes: etaTicks * MINUTES_PER_TICK };
+  return { etaMinutes: etaTicks * MINUTES_PER_TICK, fits: finishAt <= contract.deadlineAt };
 }
 
-export function acceptContract(state: GameState, contractId: string): ActionResult {
-  const preview = previewAccept(state, contractId);
-  if (!preview.ok) return preview;
+export function assignOptions(
+  state: GameState,
+  contractId: string,
+): { ok: true; options: AssigneeOption[] } | { ok: false; reason: string } {
+  if (state.dayReport) return { ok: false, reason: "O expediente acabou. Abra o dia seguinte." };
   const contract = state.contracts.find((item) => item.id === contractId);
-  const employee = state.employees.find((item) => item.id === preview.employeeId);
+  if (!contract || contract.status !== "offered") return { ok: false, reason: "Esse contrato não está no quadro." };
+  const roster = rosterGate(state, contract);
+  if (roster.reason) return { ok: false, reason: roster.reason };
+  return {
+    ok: true,
+    options: roster.free.map((employee) => ({ employeeId: employee.id, ...etaFor(state, contract, employee) })),
+  };
+}
+
+export function previewAccept(state: GameState, contractId: string): Preview {
+  const options = assignOptions(state, contractId);
+  if (!options.ok) return options;
+  if (options.options.length > 1) return { ok: false, reason: "Escolha quem assume o contrato." };
+  const only = options.options[0];
+  if (!only || !only.fits) return { ok: false, reason: "Não cabe no prazo com quem está livre." };
+  return { ok: true, employeeId: only.employeeId, etaMinutes: only.etaMinutes };
+}
+
+export function acceptContract(state: GameState, contractId: string, employeeId?: string): ActionResult {
+  const options = assignOptions(state, contractId);
+  if (!options.ok) return options;
+  let chosen = employeeId ? options.options.find((option) => option.employeeId === employeeId) : undefined;
+  if (!employeeId) {
+    if (options.options.length > 1) return { ok: false, reason: "Escolha quem assume o contrato." };
+    chosen = options.options[0];
+    if (!chosen || !chosen.fits) return { ok: false, reason: "Não cabe no prazo com quem está livre." };
+  }
+  if (!chosen) return { ok: false, reason: "Essa pessoa não pode pegar este contrato." };
+  if (!chosen.fits) return { ok: false, reason: "Não cabe no prazo com essa pessoa." };
+  const contract = state.contracts.find((item) => item.id === contractId);
+  const employee = state.employees.find((item) => item.id === chosen.employeeId);
   if (!contract || !employee) return { ok: false, reason: "Não deu para atribuir." };
   const logged = pushLog(state, `${firstName(employee.name)} pegou ${contract.title}.`);
   return {

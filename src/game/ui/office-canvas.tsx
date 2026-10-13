@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { unlockAudio } from "../audio.ts";
 import { setPainter } from "../frame.ts";
-import { drawOffice, getArt, hitEmployee } from "../render/draw-office.ts";
+import { drawOffice, hitEmployee } from "../render/draw-office.ts";
 import { getState } from "../store.ts";
 
 export function OfficeCanvas({
@@ -20,7 +20,6 @@ export function OfficeCanvas({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const art = getArt();
     const paint = (now: number) => {
       const rect = canvas.getBoundingClientRect();
       const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -30,7 +29,7 @@ export function OfficeCanvas({
         canvas.width = w;
         canvas.height = h;
       }
-      drawOffice(ctx, w, h, getState(), art, now, { reduced, selectedId });
+      drawOffice(ctx, w, h, getState(), now, { reduced, selectedId });
     };
     setPainter(paint);
     paint(performance.now());
@@ -40,7 +39,7 @@ export function OfficeCanvas({
   return (
     <canvas
       ref={ref}
-      className="h-full w-full"
+      className="office-canvas"
       aria-label="Escritório. Toque numa pessoa para ver a equipe."
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => {

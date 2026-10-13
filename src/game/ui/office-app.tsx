@@ -11,7 +11,7 @@ import {
   deskCount,
   officeLine,
 } from "../sim/balance.ts";
-import { previewAccept } from "../sim/engine.ts";
+import { assignOptions } from "../sim/engine.ts";
 import { formatClock, formatDeadline, formatEta, formatMoney, firstName } from "../sim/format.ts";
 import type { Contract, Employee, UpgradeId } from "../sim/types.ts";
 import { accept, beginFresh, buy, employ, getState, hadSave, nextDay, storageLabel, togglePause, toggleSpeed, useGame } from "../store.ts";
@@ -20,8 +20,8 @@ import { useGameLoop } from "./use-loop.ts";
 
 type Tab = "contracts" | "team" | "office";
 
-const primaryBtn = "flex h-12 w-full items-center justify-center rounded-xl bg-ink px-4 font-medium text-cream";
-const ghostBtn = "flex h-12 w-full items-center justify-center rounded-xl bg-cream-deep px-4 font-medium text-ink";
+const primaryBtn = "flex h-12 w-full items-center justify-center rounded-xl bg-ink px-4 font-medium text-cream disabled:opacity-45";
+const ghostBtn = "flex h-12 w-full items-center justify-center rounded-xl bg-cream-deep px-4 font-medium text-ink disabled:opacity-45";
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -35,20 +35,33 @@ function useReducedMotion() {
   return reduced;
 }
 
-function roleClass(role: Contract["role"]) {
+function pipClass(role: Contract["role"]) {
   if (role === "dev") return "bg-teal";
   if (role === "design") return "bg-brass";
   return "bg-coral";
 }
 
+function skillLabel(skill: number) {
+  return skill.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
 function statusLine(employee: Employee, contracts: Contract[]): string {
   if (employee.phase === "commute") return "A caminho da mesa";
-  if (employee.phase === "break") return "Pausa para o café";
+  if (employee.phase === "break") return "Pausa";
   if (employee.phase === "working") {
     const job = contracts.find((contract) => contract.id === employee.contractId);
-    return job ? `Trabalhando em ${job.title}` : "Trabalhando";
+    return job ? `Em ${job.title}` : "Trabalhando";
   }
   return "Livre";
+}
+
+function Energy({ value }: { value: number }) {
+  const width = `${Math.max(0, Math.min(100, value))}%`;
+  return (
+    <div className="h-2 overflow-hidden rounded-full bg-cream" aria-hidden="true">
+      <span className="block h-full bg-brass" style={{ width }} />
+    </div>
+  );
 }
 
 export function OfficeApp({ ready = true }: { ready?: boolean }) {
@@ -122,13 +135,13 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
 
   const startFresh = () => {
     beginFresh();
-    setTab("contracts");
+    setTab(null);
     setPlaying(true);
     unlockAudio();
   };
 
   const continueGame = () => {
-    setTab(getState().dayReport ? null : "contracts");
+    setTab(null);
     setPlaying(true);
     unlockAudio();
   };
@@ -163,8 +176,8 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
                 )}
               </div>
               <p className="mt-4 text-xs leading-relaxed text-walnut">
-                Prévia jogável no navegador, em tela vertical. O motor do jogo é separado da tela. Este
-                ambiente não gera o aplicativo de loja para Android ou iOS.
+                Prévia jogável no navegador, em tela vertical. O motor do jogo é separado da tela. Este ambiente
+                não gera o aplicativo de loja para Android ou iOS.
               </p>
             </div>
           </div>
@@ -226,12 +239,40 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
             }}
           />
           {toast ? (
-            <p className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full bg-ink px-3 py-1 text-sm text-cream">
-              {toast}
-            </p>
+            <p className="play-toast rounded-full bg-ink px-3 py-1 text-sm text-cream">{toast}</p>
+          ) : null}
+          {tab ? (
+            <section className="play-sheet sheet-scroll" data-testid={`sheet-${tab}`}>
+              <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-cream-deep" />
+              {tab === "contracts" ? <Contracts state={state} /> : null}
+              {tab === "team" ? (
+                <Team
+                  state={state}
+                  selectedId={selectedId}
+                  note={teamNote}
+                  onHire={() => {
+                    const result = employ();
+                    setTeamNote(result.ok ? null : result.reason);
+                    if (result.ok) blip("tap");
+                  }}
+                />
+              ) : null}
+              {tab === "office" ? (
+                <Office
+                  state={state}
+                  note={officeNote}
+                  onBuy={(id) => {
+                    const result = buy(id);
+                    setOfficeNote(result.ok ? null : result.reason);
+                    if (result.ok) blip("tap");
+                    else blip("fail");
+                  }}
+                />
+              ) : null}
+            </section>
           ) : null}
           {state.pausedByUser ? (
-            <div className="absolute inset-0 grid place-items-center bg-ink/40 px-6">
+            <div className="play-pause grid place-items-center bg-ink/40 px-6">
               <div className="w-full rounded-2xl bg-cream px-5 py-4 text-center">
                 <p className="display text-3xl">Relógio parado</p>
                 <p className="mt-1 text-sm text-walnut">O expediente não anda enquanto você lê.</p>
@@ -246,37 +287,6 @@ export function OfficeApp({ ready = true }: { ready?: boolean }) {
         <p className="truncate bg-ink px-4 py-2 text-sm text-cream" aria-live="polite">
           {latest}
         </p>
-
-        {tab ? (
-          <section className="sheet-scroll border-t border-walnut/15 bg-cream px-4 pt-3" data-testid={`sheet-${tab}`}>
-            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-cream-deep" />
-            {tab === "contracts" ? <Contracts state={state} /> : null}
-            {tab === "team" ? (
-              <Team
-                state={state}
-                selectedId={selectedId}
-                note={teamNote}
-                onHire={() => {
-                  const result = employ();
-                  setTeamNote(result.ok ? null : result.reason);
-                  if (result.ok) blip("tap");
-                }}
-              />
-            ) : null}
-            {tab === "office" ? (
-              <Office
-                state={state}
-                note={officeNote}
-                onBuy={(id) => {
-                  const result = buy(id);
-                  setOfficeNote(result.ok ? null : result.reason);
-                  if (result.ok) blip("tap");
-                  else blip("fail");
-                }}
-              />
-            ) : null}
-          </section>
-        ) : null}
 
         <nav className="safe-bottom grid grid-cols-3 border-t border-walnut/15 bg-cream">
           <TabButton
@@ -360,60 +370,89 @@ function TabButton({
 
 function Contracts({ state }: { state: ReturnType<typeof useGame> }) {
   const list = [...state.contracts].sort((a, b) => (a.status === b.status ? 0 : a.status === "active" ? -1 : 1));
-  if (list.length === 0) {
-    return <p className="pb-4 text-sm text-walnut">O quadro está limpo.</p>;
-  }
+  if (list.length === 0) return <p className="text-sm text-walnut">O quadro está limpo.</p>;
   return (
     <div className="grid gap-3 pb-4">
       {list.map((contract) => {
-        const preview = contract.status === "offered" ? previewAccept(state, contract.id) : null;
+        const gate = contract.status === "offered" ? assignOptions(state, contract.id) : null;
         const pct = Math.round((contract.workDone / contract.workTotal) * 100);
         const owner = state.employees.find((employee) => employee.id === contract.assigneeId);
+        const solo = gate && gate.ok && gate.options.length === 1 ? gate.options[0] : null;
         return (
           <article key={contract.id} className="rounded-xl bg-cream-deep/50 p-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="display text-xl leading-tight">{contract.client}</h3>
-              <span className="flex items-center gap-2 text-xs text-walnut">
-                <span className={`size-2 rounded-full ${roleClass(contract.role)}`} />
+              <span className="flex items-center gap-1 text-xs text-walnut">
+                <span className={`size-2 rounded-full ${pipClass(contract.role)}`} />
                 {ROLE_LABEL[contract.role]}
               </span>
             </div>
-            <p className="mt-1 font-medium">{contract.title}</p>
-            <p className="mt-1 text-sm leading-snug text-walnut">{contract.detail}</p>
+            <p className="text-sm font-medium">{contract.title}</p>
+            <p className="text-xs leading-snug text-walnut">{contract.detail}</p>
             <div className="nums mt-2 flex justify-between text-sm">
               <span>{formatMoney(contract.pay)}</span>
               <span>{formatDeadline(state.day, contract.deadlineAt)}</span>
             </div>
             {contract.status === "active" ? (
-              <div className="mt-3">
+              <div className="mt-2">
                 <div className="mb-1 flex justify-between text-xs text-walnut">
                   <span>{owner ? firstName(owner.name) : "Em andamento"}</span>
                   <span className="nums">{pct}%</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-cream">
-                  <div className="h-full bg-teal" style={{ width: `${pct}%` }} />
+                  <span className="block h-full bg-teal" style={{ width: `${pct}%` }} />
                 </div>
               </div>
-            ) : (
-              <div className="mt-3">
+            ) : null}
+            {gate && !gate.ok ? <p className="mt-2 text-xs text-coral">{gate.reason}</p> : null}
+            {solo ? (
+              <div className="mt-2">
                 <button
                   className={primaryBtn}
                   data-testid={`accept-${contract.id}`}
-                  disabled={!preview?.ok}
+                  disabled={!solo.fits}
                   onClick={() => {
-                    const result = accept(contract.id);
+                    const result = accept(contract.id, solo.employeeId);
                     if (result.ok) blip("tap");
                   }}
                 >
                   Aceitar
                 </button>
-                {preview?.ok ? (
-                  <p className="mt-2 text-xs text-walnut">Cabe {formatEta(preview.etaMinutes)}.</p>
-                ) : (
-                  <p className="mt-2 text-xs text-coral">{preview?.reason}</p>
-                )}
+                <p className={`mt-1 text-xs ${solo.fits ? "text-walnut" : "text-coral"}`}>
+                  {solo.fits ? `Cabe ${formatEta(solo.etaMinutes)}.` : "Não cabe no prazo com quem está livre."}
+                </p>
               </div>
-            )}
+            ) : null}
+            {gate && gate.ok && gate.options.length > 1 ? (
+              <div className="mt-2 grid gap-2">
+                <p className="text-xs text-walnut">Quem assume</p>
+                {gate.options.map((option) => {
+                  const employee = state.employees.find((item) => item.id === option.employeeId);
+                  if (!employee) return null;
+                  return (
+                    <button
+                      key={option.employeeId}
+                      className={`${ghostBtn} choice-btn`}
+                      data-testid={`assign-${contract.id}-${employee.id}`}
+                      disabled={!option.fits}
+                      onClick={() => {
+                        const result = accept(contract.id, employee.id);
+                        if (result.ok) blip("tap");
+                      }}
+                    >
+                      <span>{employee.name}</span>
+                      <span className="text-xs font-normal text-walnut">
+                        Habilidade {skillLabel(employee.skill)} · Energia {Math.round(employee.energy)}
+                      </span>
+                      <span className="text-xs font-normal text-walnut">{statusLine(employee, state.contracts)}</span>
+                      <span className="text-xs font-normal text-walnut">
+                        {option.fits ? formatEta(option.etaMinutes) : "Não cabe no prazo"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </article>
         );
       })}
@@ -442,17 +481,19 @@ function Team({
         >
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="display text-xl">{employee.name}</h3>
-            <span className="text-xs text-walnut">{ROLE_LABEL[employee.role]}</span>
+            <span className="flex items-center gap-2 text-xs text-walnut">
+              <span className={`size-2 rounded-full ${pipClass(employee.role)}`} />
+              {ROLE_LABEL[employee.role]}
+            </span>
           </div>
           <p className="mt-1 text-sm">{statusLine(employee, state.contracts)}</p>
+          <p className="nums mt-1 text-xs text-walnut">Habilidade {skillLabel(employee.skill)}</p>
           <div className="mt-2">
             <div className="mb-1 flex justify-between text-xs text-walnut">
               <span>Energia</span>
               <span className="nums">{Math.round(employee.energy)}</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-cream">
-              <div className="h-full bg-brass" style={{ width: `${Math.max(0, Math.min(100, employee.energy))}%` }} />
-            </div>
+            <Energy value={employee.energy} />
           </div>
         </article>
       ))}

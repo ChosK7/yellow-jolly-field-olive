@@ -4,6 +4,7 @@ import { HIRE_COST, UPGRADE_CATALOG, contractPayout, productionPerTick } from ".
 import {
   absoluteMinute,
   acceptContract,
+  assignOptions,
   buyUpgrade,
   createInitialState,
   hire,
@@ -47,6 +48,7 @@ describe("contract cycle", () => {
     assert.equal(state.employees.find((employee) => employee.id === "lina")?.phase, "commute");
     state = tick(state);
     assert.equal(state.employees.find((employee) => employee.id === "lina")?.phase, "working");
+    assert.equal(state.contracts.find((item) => item.id === contract.id)?.workDone ?? 0, 0);
 
     const before = state.contracts.find((item) => item.id === contract.id)?.workDone ?? 0;
     state = tick(state);
@@ -116,6 +118,39 @@ describe("contract cycle", () => {
     };
     const preview = previewAccept(tight, contract.id);
     assert.equal(preview.ok, false);
+  });
+
+  it("asks who takes the job when two people of the same role are free", () => {
+    const state = createInitialState();
+    const contract = devOffer(state);
+    const withLia = {
+      ...state,
+      employees: [
+        ...state.employees,
+        {
+          id: "lia",
+          name: "Lia Souza",
+          role: "dev" as const,
+          skill: 3.2,
+          energy: 80,
+          contractId: null,
+          phase: "idle" as const,
+          phaseTicks: 0,
+          sprite: "lina" as const,
+        },
+      ],
+    };
+    const options = assignOptions(withLia, contract.id);
+    assert.equal(options.ok, true);
+    if (!options.ok) return;
+    assert.equal(options.options.length, 2);
+    assert.equal(acceptContract(withLia, contract.id).ok, false);
+    const accepted = acceptContract(withLia, contract.id, "lia");
+    assert.equal(accepted.ok, true);
+    if (!accepted.ok) return;
+    assert.equal(accepted.state.employees.find((employee) => employee.id === "lia")?.phase, "commute");
+    assert.equal(accepted.state.contracts.find((item) => item.id === contract.id)?.assigneeId, "lia");
+    assert.equal(accepted.state.employees.find((employee) => employee.id === "lina")?.contractId, null);
   });
 });
 

@@ -79,8 +79,8 @@ export function beginFresh() {
   emit();
 }
 
-export function accept(id: string): ActionResult {
-  const result = acceptContract(state, id);
+export function accept(id: string, employeeId?: string): ActionResult {
+  const result = acceptContract(state, id, employeeId);
   if (result.ok) commit(result.state);
   return result;
 }
